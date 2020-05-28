@@ -6,44 +6,45 @@
 #include "pid_controller.h"
 #define MS_TO_SEC 1000
 
+#ifdef TEST
+uint32_t millis_counter = 0;
+uint32_t millis() {
+    return millis_counter;
+}
+uint32_t increment_millis_by(uint32_t inc){
+    millis_counter += inc;
+}
+#endif
+
 /* Constructor 
 */
-PID::PID(uint32_t sample_time,
+PID::PID(uint32_t Sample_time,
         double Kp,
         double Ki,
         double Kd,
-        double min_output, 
-        double max_output,
-        double initial_output) {
+        double Min_output, 
+        double Max_output,
+        double Initial_output) {
     PID::SetTunings(Kp, Ki, Kd);
-    PID::SetMinMaxOutput(min_output, max_output);
+    PID::SetMinMaxOutput(Min_output, Max_output);
 
-    last_output = initial_output;
-    output_sum = initial_output;
-    sample_time = sample_time;
+    last_output = Initial_output;
+    output_sum = Initial_output;
+    sample_time = Sample_time;
     last_measurement = 0;
     
-    // Mock millis if testing
-    #ifndef TEST
     last_time = millis();
-    #else
-    last_time = 0;
-    #endif
 }
 
-void PID::SetMinMaxOutput(double min_output, double max_output){
-    min_output = min_output;
-    max_output = max_output;
+void PID::SetMinMaxOutput(double Min_output, double Max_output){
+    min_output = Min_output;
+    max_output = Max_output;
 }
 
 double PID::Compute(double set_point, double measurement){
 
     // Mock millis if testing
-    #ifndef TEST
     uint32_t now = millis();
-    #else
-    uint32_t now = 0;
-    #endif
     
     uint32_t time_change = (now - last_time);
     if(time_change < sample_time){
@@ -54,15 +55,21 @@ double PID::Compute(double set_point, double measurement){
         double d_measurement = measurement - last_measurement;
 
         output_sum += (error * ki * time_change / MS_TO_SEC);
-        //output_sum = min(output_sum, max_output);   // Limit to max
-        //output_sum = max(output_sum, min_output);    // Limit to min
+        if(output_sum > max_output){
+            output_sum = max_output;
+        } if(output_sum < min_output){
+            output_sum = min_output;
+        }
         
         double output = error * kp;     // Proportional part
         output -= (d_measurement * MS_TO_SEC / time_change * kd); // Derivative part
         output += output_sum;           // Integral part
         
-        //output = min(output, max_output);
-        //output = max(output, min_output);
+        if(output > max_output){
+            output = max_output;
+        } if(output < min_output){
+            output = min_output;
+        }
         
         last_time = now;
         last_measurement = measurement;

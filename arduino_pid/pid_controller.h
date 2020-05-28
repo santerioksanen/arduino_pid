@@ -1,18 +1,24 @@
 #ifndef pid_controller_h
 #define pid_controller_h
 
+#ifdef TEST
+#include <stdint.h>
+uint32_t increment_millis_by(uint32_t inc);
+uint32_t millis();
+#endif
+
 class PID{
 
     public:
     
         // Common functions
-        PID(uint32_t sample_time,
+        PID(uint32_t Sample_time,
             double Kp,
             double Ki,
             double Kd,
-            double min_output,
-            double max_output,
-            double initial_output);
+            double Min_output,
+            double Max_output,
+            double Initial_output);
 
         double Compute(double set_point, double measurement);
 
