@@ -1,4 +1,8 @@
+#ifndef TEST
 #include "Arduino.h"
+#else
+#include <stdint.h>
+#endif
 #include "pid_controller.h"
 #define MS_TO_SEC 1000
 
@@ -18,7 +22,13 @@ PID::PID(uint32_t sample_time,
     output_sum = initial_output;
     sample_time = sample_time;
     last_measurement = 0;
-    last_time = millis() - sample_time;
+    
+    // Mock millis if testing
+    #ifndef TEST
+    last_time = millis();
+    #else
+    last_time = 0;
+    #endif
 }
 
 void PID::SetMinMaxOutput(double min_output, double max_output){
@@ -27,7 +37,14 @@ void PID::SetMinMaxOutput(double min_output, double max_output){
 }
 
 double PID::Compute(double set_point, double measurement){
+
+    // Mock millis if testing
+    #ifndef TEST
     uint32_t now = millis();
+    #else
+    uint32_t now = 0;
+    #endif
+    
     uint32_t time_change = (now - last_time);
     if(time_change < sample_time){
         return last_output;
