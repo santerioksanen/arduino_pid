@@ -32,7 +32,7 @@ volatile uint8_t lt_avg = 0;
 volatile boolean rotation = false;
 volatile uint32_t rotation_count = 0;
 
-PID controller(PID_UPDATE_INTERVAL, 1, 1, 1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
+PID controller(PID_UPDATE_INTERVAL, 1.5, 0.5, 0.1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
 
 ISR(ADC_vect){ //This is our interrupt service routine
   uint8_t tmp = ADCH;
@@ -115,7 +115,7 @@ float diff_error = 0;
 float k_p = 0.3;
 float k_d = 0;
 
-float rps = 0;
+double rps = 0;
 
 uint8_t state=0;    // State 0 = stay still, state 1 = throttle control, state 2 = pid control
 uint8_t incomingByte[SERIAL_BUF_SIZE];
@@ -207,6 +207,9 @@ void loop() {
       rps = divider*1000 / rps;
     } else {
       rps = 0;
+    }
+    if(OCR1A < THROTTLE_STILL){   // We are going backwards
+      rps = rps*-1;
     }
   }
   

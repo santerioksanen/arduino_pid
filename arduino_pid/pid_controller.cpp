@@ -54,7 +54,7 @@ double PID::Compute(double set_point, double measurement){
         double error = set_point - measurement;
         double d_measurement = measurement - last_measurement;
 
-        output_sum += (error * ki * time_change / MS_TO_SEC);
+        output_sum += (error * ki * sample_time / MS_TO_SEC);
         if(output_sum > max_output){
             output_sum = max_output;
         } if(output_sum < min_output){
@@ -62,7 +62,7 @@ double PID::Compute(double set_point, double measurement){
         }
         
         double output = error * kp;     // Proportional part
-        output -= (d_measurement * MS_TO_SEC / time_change * kd); // Derivative part
+        output -= (d_measurement * MS_TO_SEC / sample_time * kd); // Derivative part
         output += output_sum;           // Integral part
         
         if(output > max_output){
