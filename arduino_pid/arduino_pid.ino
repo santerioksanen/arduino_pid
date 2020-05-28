@@ -1,81 +1,8 @@
-#define ADC_pin B010
-#define MEAS_BUF_SIZE 512
-#define MEAS_INTERVAL 1
-#define AVG_DIFF 7
-#define WAVES_NUM 5
-#define THROTTLE_PIN 3
-#define THROTTLE_STILL 1420
-#define THROTTLE_FULL_POWER 2000
-#define THROTTLE_FULL_REVERSE 1000
-#define PID_UPDATE_INTERVAL 100
-#define MAX_STEP_CHANGE 1
-#define CLEAR_MEASUREMENTS_DELAY 200
-#define PRINT_INTERVAL 1000
-#define SERIAL_BUF_SIZE 15
-
+#include "constants.h"
 #include "pid_controller.h"
-
-// PINS: PWM out: 9, LDR in: A2P
-
-volatile uint8_t data_arr[MEAS_BUF_SIZE]={0};
-volatile uint16_t data_point = 0;
-volatile uint32_t lt_sum = 0;
-volatile uint32_t meas_count = 0;
-volatile uint32_t last_below_avg = 0;
-volatile uint32_t last_above_avg = 0;
-volatile uint32_t last_rotation = 0;
-volatile boolean above_avg = false;
-volatile boolean data_flag=false;
-volatile uint32_t waves_arr[WAVES_NUM]={0};
-volatile uint8_t waves_point = 0;
-volatile uint8_t lt_avg = 0;
-volatile boolean rotation = false;
-volatile uint32_t rotation_count = 0;
+#include "ldr_speedometer.h"
 
 PID controller(PID_UPDATE_INTERVAL, 1.5, 0.5, 0.1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
-
-ISR(ADC_vect){ //This is our interrupt service routine
-  uint8_t tmp = ADCH;
-  lt_sum = lt_sum - data_arr[data_point];
-  data_arr[data_point] = tmp; // Store the 8 most significant bits in the data buffer and increment the bufferIndex
-  lt_sum = lt_sum + tmp;
-  meas_count++;
-  data_flag = true;
-  data_point = (data_point+1) % MEAS_BUF_SIZE;
-  lt_avg = lt_sum / MEAS_BUF_SIZE;
-  if(tmp < (lt_avg - AVG_DIFF) && above_avg == true){
-    if(last_below_avg > 0){
-      waves_arr[waves_point] = millis() - last_below_avg;
-      waves_point = (waves_point + 1) % WAVES_NUM;
-    }
-    last_below_avg = millis();
-    above_avg = false;
-    rotation = true;
-    last_rotation = millis();
-    rotation_count++;
-  } else if(tmp > (lt_avg + AVG_DIFF) && above_avg == false){
-    last_above_avg = millis();
-    above_avg = true;
-  }
-}
-
-void init_adc() {
-  //Enable ADC and interrupt on conversion done
-  ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
-
-  DIDR0  = bit(ADC0D)|bit(ADC1D)|bit(ADC2D)|bit(ADC3D);  // disable digital input buffer for analog input pin 0, 1 and 2
-
-  // Enable ADC, set auto trigger, enable interrupt, set clock divider to 128 = 125 kHz
-  ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0); //  | (1 << ADATE)
-  ADMUX = (1 << REFS0) | (1 << ADLAR); //Set Voltage reference to Avcc (5v), Left adjust converted value
-
-  ADMUX |= ADC_pin;
-  
-  DIDR0 = 0xFF; //Disable digital input registers on analogue inputs A0-7
-
-  ADCSRB &= ~((0 << ADTS2) | (0 << ADTS1) | (0 << ADTS0)); //Select free running. 13 ADC clock cycles per converson ADC sample rate 250kHz/13 = 19.23kS/s
-  //ADCSRA |= (1 << ADSC); //start conversion
-}
 
 void init_pwm() {
   // Set PB1 to be an output (Pin9 Arduino UNO)
@@ -95,7 +22,7 @@ void init_pwm() {
 
 void setup() {
   cli();
-  init_adc();
+  init_ldr_adc();
   init_pwm();
   sei();
   Serial.begin(115200);
@@ -170,47 +97,10 @@ void loop() {
   
   // Calculate rps
   if(start_of_loop >= next_pid_update){
-    rps = 0;
-    uint16_t divider = 0;
-    cli();
-    uint8_t j = (waves_point-1) % WAVES_NUM;
-    //uint32_t last_rotation = waves_arr[j];
-    for(uint8_t i = 0; i < WAVES_NUM; i++){
-      if(j < 0){
-        j = WAVES_NUM-1;
-      }
-      if(waves_arr[j] > 0 and waves_arr[j] < 1000){
-        uint16_t weight = WAVES_NUM-i;
-        rps = rps + waves_arr[j]*weight;
-        divider = divider+weight;
-      }
-      j = (j-1) % WAVES_NUM;
-    }
-    sei();
-    if(state == 2){
-      j = (waves_point-1) % WAVES_NUM;
-      if(j < 0){
-        j = WAVES_NUM-1;
-      }
-      float last_rps;
-      if(waves_arr[j] > 0){
-        last_rps = 1000 / waves_arr[j];
-      } else {
-        last_rps = 0;
-      }
-      Serial.print("Last rotation was measured at: ");
-      Serial.print(last_rotation);
-      Serial.print(", with a rps of: ");
-      Serial.println(last_rps);
-    }
-    if(rps > 0){
-      rps = divider*1000 / rps;
-    } else {
-      rps = 0;
-    }
-    if(OCR1A < THROTTLE_STILL){   // We are going backwards
-      rps = rps*-1;
-    }
+    bool print_details = false;
+    if(state == 2) print_details=true;
+    
+    rps = calculate_rps(print_details);
   }
   
   // Update throttle for pid
@@ -228,56 +118,6 @@ void loop() {
     case 2:
       if(start_of_loop >= next_pid_update){
         OCR1A = controller.Compute(set_throttle_value, rps);
-        /*float error_tmp = set_throttle_value - rps;
-        diff_error = error_tmp - error;
-        error = error_tmp;
-        
-        //float tmp = error * k_p +       // PD controller output
-        float p = error * k_p;
-        float d = diff_error / (1000/PID_UPDATE_INTERVAL) * k_d;
-        float tmp = p + d;
-        Serial.print("RPS: ");
-        Serial.print(rps);
-        Serial.print(" Error value: ");
-        Serial.print(error_tmp);
-        Serial.print(" RPS diff: ");
-        Serial.print(diff_error);
-        Serial.print(" P value: ");
-        Serial.print(p);
-        Serial.print(" D value: ");
-        Serial.print(d);
-        Serial.print(" PD value: ");
-        Serial.print(tmp);
-        Serial.print(" OCR1A: ");
-        Serial.print(OCR1A);
-        Serial.print(" millis: ");
-        Serial.println(start_of_loop);
-        Serial.println();
-        
-        if(tmp > MAX_STEP_CHANGE){
-          tmp = MAX_STEP_CHANGE;
-        } else if(tmp < -MAX_STEP_CHANGE){
-          tmp = -MAX_STEP_CHANGE;
-        }
-        
-        uint16_t ctrl = THROTTLE_STILL + tmp * (THROTTLE_FULL_POWER - THROTTLE_STILL);
-        if(ctrl > (OCR1A + MAX_STEP_CHANGE)){
-          OCR1A = OCR1A + MAX_STEP_CHANGE;
-        } else if(ctrl < (OCR1A - MAX_STEP_CHANGE)){
-          OCR1A = OCR1A - MAX_STEP_CHANGE;
-        } else {
-          OCR1A = ctrl; 
-        }
-
-        uint16_t register_tmp = OCR1A + tmp;
-        if(register_tmp > THROTTLE_FULL_POWER){
-          register_tmp = THROTTLE_FULL_POWER;
-        } else if(register_tmp < THROTTLE_FULL_REVERSE){
-          register_tmp = THROTTLE_FULL_REVERSE;
-        }
-        
-        OCR1A = max(register_tmp, THROTTLE_STILL);  */      
-        
         next_pid_update = millis() + PID_UPDATE_INTERVAL;
       }
       break;
@@ -301,13 +141,10 @@ void loop() {
 
   // Send stats over serial
   if((millis() - lastMillis) > PRINT_INTERVAL){
-    data_flag = false;
     //Serial.print("Long term average: ");
     //Serial.print(lt_avg);
     //Serial.print(", long term sum: ");
     //Serial.print(lt_sum);
-    //Serial.print(", measurement count: ");
-    //Serial.print(meas_count);
     Serial.print("RPS: ");
     Serial.print(rps);
     Serial.print(", Operating mode: ");
