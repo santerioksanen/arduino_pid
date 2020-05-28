@@ -1,17 +1,19 @@
 #define ADC_pin B010
 #define MEAS_BUF_SIZE 512
 #define MEAS_INTERVAL 1
-#define AVG_DIFF 5
-#define WAVES_NUM 10
+#define AVG_DIFF 7
+#define WAVES_NUM 5
 #define THROTTLE_PIN 3
 #define THROTTLE_STILL 1420
 #define THROTTLE_FULL_POWER 2000
 #define THROTTLE_FULL_REVERSE 1000
-#define PID_UPDATE_INTERVAL 200
-#define MAX_STEP_CHANGE 20
-#define CLEAR_MEASUREMENTS_DELAY 800
+#define PID_UPDATE_INTERVAL 100
+#define MAX_STEP_CHANGE 1
+#define CLEAR_MEASUREMENTS_DELAY 200
 #define PRINT_INTERVAL 1000
 #define SERIAL_BUF_SIZE 15
+
+#include "pid_controller.h"
 
 // PINS: PWM out: 9, LDR in: A2P
 
@@ -24,11 +26,13 @@ volatile uint32_t last_above_avg = 0;
 volatile uint32_t last_rotation = 0;
 volatile boolean above_avg = false;
 volatile boolean data_flag=false;
-volatile uint16_t waves_arr[WAVES_NUM]={0};
+volatile uint32_t waves_arr[WAVES_NUM]={0};
 volatile uint8_t waves_point = 0;
 volatile uint8_t lt_avg = 0;
 volatile boolean rotation = false;
 volatile uint32_t rotation_count = 0;
+
+PID controller(PID_UPDATE_INTERVAL, 1, 1, 1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
 
 ISR(ADC_vect){ //This is our interrupt service routine
   uint8_t tmp = ADCH;
@@ -108,8 +112,8 @@ uint16_t throttle = THROTTLE_STILL;
 float error = 0;
 float diff_error = 0;
 
-float k_p = 0.1;
-float k_d = -1;
+float k_p = 0.3;
+float k_d = 0;
 
 float rps = 0;
 
@@ -135,7 +139,7 @@ void process_incoming_data(){
         break;
       case 'P':
         state = 2;
-        set_throttle_value = 15;
+        set_throttle_value = 30;
         break;
         /*switch(incomingByte[1]){
           case 'T':   // Set Throttle (ST)
@@ -150,7 +154,9 @@ void process_incoming_data(){
   }
 }
 
+uint32_t start_of_loop = 0;
 void loop() {
+  start_of_loop = millis();
   // Parse serial data
   while (Serial.available() > 0) {
     // read the incoming byte:
@@ -163,11 +169,12 @@ void loop() {
   process_incoming_data();
   
   // Calculate rps
-  if(millis() >= next_pid_update){
+  if(start_of_loop >= next_pid_update){
     rps = 0;
     uint16_t divider = 0;
     cli();
     uint8_t j = (waves_point-1) % WAVES_NUM;
+    //uint32_t last_rotation = waves_arr[j];
     for(uint8_t i = 0; i < WAVES_NUM; i++){
       if(j < 0){
         j = WAVES_NUM-1;
@@ -180,6 +187,22 @@ void loop() {
       j = (j-1) % WAVES_NUM;
     }
     sei();
+    if(state == 2){
+      j = (waves_point-1) % WAVES_NUM;
+      if(j < 0){
+        j = WAVES_NUM-1;
+      }
+      float last_rps;
+      if(waves_arr[j] > 0){
+        last_rps = 1000 / waves_arr[j];
+      } else {
+        last_rps = 0;
+      }
+      Serial.print("Last rotation was measured at: ");
+      Serial.print(last_rotation);
+      Serial.print(", with a rps of: ");
+      Serial.println(last_rps);
+    }
     if(rps > 0){
       rps = divider*1000 / rps;
     } else {
@@ -198,13 +221,35 @@ void loop() {
       if(OCR1A != throttle){
         OCR1A = throttle;
       }
+      break;
     case 2:
-      if(millis() >= next_pid_update){
-        float error_tmp = set_throttle_value - rps;
+      if(start_of_loop >= next_pid_update){
+        OCR1A = controller.Compute(set_throttle_value, rps);
+        /*float error_tmp = set_throttle_value - rps;
         diff_error = error_tmp - error;
         error = error_tmp;
         
-        float tmp = error * k_p + diff_error / (1000*PID_UPDATE_INTERVAL) * k_d;      // PD controller output
+        //float tmp = error * k_p +       // PD controller output
+        float p = error * k_p;
+        float d = diff_error / (1000/PID_UPDATE_INTERVAL) * k_d;
+        float tmp = p + d;
+        Serial.print("RPS: ");
+        Serial.print(rps);
+        Serial.print(" Error value: ");
+        Serial.print(error_tmp);
+        Serial.print(" RPS diff: ");
+        Serial.print(diff_error);
+        Serial.print(" P value: ");
+        Serial.print(p);
+        Serial.print(" D value: ");
+        Serial.print(d);
+        Serial.print(" PD value: ");
+        Serial.print(tmp);
+        Serial.print(" OCR1A: ");
+        Serial.print(OCR1A);
+        Serial.print(" millis: ");
+        Serial.println(start_of_loop);
+        Serial.println();
         
         if(tmp > MAX_STEP_CHANGE){
           tmp = MAX_STEP_CHANGE;
@@ -212,14 +257,14 @@ void loop() {
           tmp = -MAX_STEP_CHANGE;
         }
         
-        /*uint16_t ctrl = THROTTLE_STILL + tmp * (THROTTLE_FULL_POWER - THROTTLE_STILL);
+        uint16_t ctrl = THROTTLE_STILL + tmp * (THROTTLE_FULL_POWER - THROTTLE_STILL);
         if(ctrl > (OCR1A + MAX_STEP_CHANGE)){
           OCR1A = OCR1A + MAX_STEP_CHANGE;
         } else if(ctrl < (OCR1A - MAX_STEP_CHANGE)){
           OCR1A = OCR1A - MAX_STEP_CHANGE;
         } else {
           OCR1A = ctrl; 
-        }*/
+        }
 
         uint16_t register_tmp = OCR1A + tmp;
         if(register_tmp > THROTTLE_FULL_POWER){
@@ -228,9 +273,9 @@ void loop() {
           register_tmp = THROTTLE_FULL_REVERSE;
         }
         
-        OCR1A = register_tmp;        
+        OCR1A = max(register_tmp, THROTTLE_STILL);  */      
         
-        next_pid_update = next_pid_update + PID_UPDATE_INTERVAL;
+        next_pid_update = millis() + PID_UPDATE_INTERVAL;
       }
       break;
   }
