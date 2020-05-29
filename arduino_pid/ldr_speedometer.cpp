@@ -92,9 +92,6 @@ double calculate_rps(bool print_output) {
     } else {
       rps = 0;
     }
-    if(OCR1A < THROTTLE_STILL){   // We are going backwards
-      rps = rps*-1;
-    }
     return rps;
 }
 

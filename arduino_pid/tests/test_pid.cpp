@@ -16,4 +16,16 @@ TEST_CASE("Initial return") {
     REQUIRE(controller.Compute(30, 0) == 1420);
     increment_millis_by(99);
     REQUIRE(controller.Compute(30, 0) == 1453);
+    controller.Reset(1420);
+    REQUIRE(controller.Compute(30, 0) == 1420);
+}
+
+TEST_CASE("Reverse") {
+    REQUIRE(controller.Compute(-30, 0) == 1420);
+    increment_millis_by(1);
+    REQUIRE(controller.Compute(-30, 0) == 1420);
+    increment_millis_by(99);
+    REQUIRE(controller.Compute(-30, 0) == 1387);
+    controller.Reset(1420);
+    REQUIRE(controller.Compute(-30, 0) == 1420);
 }

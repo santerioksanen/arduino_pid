@@ -20,6 +20,7 @@ class PID{
             double Max_output,
             double Initial_output);
 
+        void Reset(double Initial_output);
         double Compute(double set_point, double measurement);
 
         bool SetTunings(double Kp);

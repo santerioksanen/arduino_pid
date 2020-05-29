@@ -17,16 +17,13 @@ void setup() {
     throttle.Init(THROTTLE_STILL);
     steering.Init(STEERING_FORWARD);
     delay(1500);
-    Serial.print("OCRI1B: ");
-    Serial.print(OCR1B);
-    Serial.print(", OCR1A: ");
-    Serial.println(OCR1A);
 }
 
 uint32_t lastMillis = 0;
 uint32_t next_pid_update = 0;
+bool reverse = false;
 
-uint16_t set_throttle_value = 15;
+int16_t set_throttle_value = 15;
 uint16_t throttle_val = THROTTLE_STILL;
 
 double rps = 0;
@@ -53,7 +50,10 @@ void process_incoming_data(){
             break;
         case 'P':
             state = 2;
-            set_throttle_value = 30;
+            //controller.SetMinMaxOutput(THROTTLE_FULL_REVERSE, THROTTLE_STILL);
+            controller.SetMinMaxOutput(THROTTLE_STILL, THROTTLE_FULL_POWER);
+            //reverse = true;
+            set_throttle_value = 40;
             //steering.SetValue(STEERING_RIGHT);
             break;
         case 'L':
@@ -102,6 +102,11 @@ void loop() {
         if(state == 2) print_details=true;
         
         rps = calculate_rps(print_details);
+        cli();
+        if(reverse == true){
+            rps = rps*-1;
+        }
+        sei();
     }
     
     // Update throttle for pid

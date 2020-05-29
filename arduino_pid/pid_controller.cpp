@@ -41,6 +41,13 @@ void PID::SetMinMaxOutput(double Min_output, double Max_output){
     max_output = Max_output;
 }
 
+void PID::Reset(double Initial_output){
+    last_output = Initial_output;
+    output_sum = Initial_output;
+
+    last_time = millis();
+}
+
 double PID::Compute(double set_point, double measurement){
 
     // Mock millis if testing
