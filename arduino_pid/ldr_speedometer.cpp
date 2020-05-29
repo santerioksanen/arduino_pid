@@ -15,6 +15,8 @@ volatile uint8_t lt_avg = 0;
 volatile boolean rotation = false;
 volatile uint32_t rotation_count = 0;
 
+uint32_t next_measurement = 0;
+
 void init_ldr_adc() {
     //Enable ADC and interrupt on conversion done
     ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
@@ -31,6 +33,24 @@ void init_ldr_adc() {
 
     ADCSRB &= ~((0 << ADTS2) | (0 << ADTS1) | (0 << ADTS0)); //Select free running. 13 ADC clock cycles per converson ADC sample rate 250kHz/13 = 19.23kS/s
     //ADCSRA |= (1 << ADSC); //start conversion
+}
+
+// Called from main loop
+void run_measurements() {
+    // Start measurement
+    if(millis() >= next_measurement){
+        ADCSRA |= (1 << ADSC);
+        next_measurement = next_measurement + MEAS_INTERVAL;
+    }
+    // Clear measurements
+    if(millis() - last_rotation > CLEAR_MEASUREMENTS_DELAY){
+        cli();
+        for(uint8_t i = 0; i < WAVES_NUM; i++){
+            waves_arr[i] = 0;
+        }
+        last_below_avg = 0;
+        sei();
+    }
 }
 
 double calculate_rps(bool print_output) {

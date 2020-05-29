@@ -2,6 +2,7 @@
 #define ldr_speedometer_h
 
 void init_ldr_adc();
+void run_measurements();
 double calculate_rps(bool print_output);
 
 extern uint32_t lt_sum;
