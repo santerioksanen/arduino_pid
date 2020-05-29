@@ -11,7 +11,8 @@ void init_servo_pwm() {
     TCCR1B = 0;
 
     // Set inverting mode
-    TCCR1A |= (1 << COM1A1) | (1 << COM1A0);
+    TCCR1A |= (1 << COM1A1) | (1 << COM1A0) | (1 << COM1B1) | (1 << COM1B0);
+                                            // Set OC1A and OC1B to high on compare match 
     
     TCCR1B = (1 << WGM13) | (1 << CS11);     // Set mode to phase and frequency correct, set prescaler to 8 (16 MHz/8) = 2000 kHz 
     ICR1 = 20000;                            // Count to 20000 (20000 * 1/2000kHz) = 0.01 s = 10 ms
@@ -19,7 +20,8 @@ void init_servo_pwm() {
 }
 
 Pin pins[] = {
-    {9, &DDRB, PB1, &OCR1A}
+    {9, &DDRB, PB1, &OCR1A},
+    {10, &DDRB, PB2, &OCR1B}
 };
 
 int16_t lookup_pin_details(uint8_t lookup_pin){

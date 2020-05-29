@@ -6,15 +6,21 @@
 PID controller(PID_UPDATE_INTERVAL, 1.5, 0.5, 0.1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
 
 Servo throttle(THROTTLE_PIN);
+Servo steering(STEERING_PIN);
 
 void setup() {
     cli();
     init_ldr_adc();
     sei();
     Serial.begin(115200);
-    throttle.Init(THROTTLE_STILL);
     init_servo_pwm();
+    throttle.Init(THROTTLE_STILL);
+    steering.Init(STEERING_FORWARD);
     delay(1500);
+    Serial.print("OCRI1B: ");
+    Serial.print(OCR1B);
+    Serial.print(", OCR1A: ");
+    Serial.println(OCR1A);
 }
 
 uint32_t lastMillis = 0;
@@ -37,10 +43,10 @@ void process_incoming_data(){
             state = 1;
             throttle_val = OCR1A+1;
             break;
-        case 'R':
-            state = 1;
-            throttle_val = OCR1A-1;
-            break;
+        //case 'R':
+        //    state = 1;
+        //    throttle_val = OCR1A-1;
+        //    break;
         case 'S':
             state = 0;
             throttle_val = THROTTLE_STILL;
@@ -48,6 +54,16 @@ void process_incoming_data(){
         case 'P':
             state = 2;
             set_throttle_value = 30;
+            //steering.SetValue(STEERING_RIGHT);
+            break;
+        case 'L':
+            steering.SetValue(STEERING_LEFT);
+            break;
+        case 'R':
+            steering.SetValue(STEERING_RIGHT);
+            break;
+        case 'F':
+            steering.SetValue(STEERING_FORWARD);
             break;
             /*switch(incomingByte[1]){
             case 'T':   // Set Throttle (ST)
@@ -120,8 +136,8 @@ void loop() {
         Serial.print(rps);
         Serial.print(", Operating mode: ");
         Serial.print(state);
-        Serial.print(", OCR1A: ");
-        Serial.print(OCR1A);
+        Serial.print(", Throttle register: ");
+        Serial.print(throttle.GetValue());
         Serial.print(", rotation count: ");
         Serial.println(rotation_count);
         //Serial.print(", last measured value: ");
