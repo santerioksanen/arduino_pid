@@ -5,12 +5,15 @@
 
 PID controller(PID_UPDATE_INTERVAL, 1.5, 0.5, 0.1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
 
+Servo throttle(THROTTLE_PIN);
+
 void setup() {
     cli();
     init_ldr_adc();
-    init_servo_pwm();
     sei();
     Serial.begin(115200);
+    throttle.Init(THROTTLE_STILL);
+    init_servo_pwm();
     delay(1500);
 }
 
@@ -18,12 +21,7 @@ uint32_t lastMillis = 0;
 uint32_t next_pid_update = 0;
 
 uint16_t set_throttle_value = 15;
-uint16_t throttle = THROTTLE_STILL;
-float error = 0;
-float diff_error = 0;
-
-float k_p = 0.3;
-float k_d = 0;
+uint16_t throttle_val = THROTTLE_STILL;
 
 double rps = 0;
 
@@ -37,15 +35,15 @@ void process_incoming_data(){
         switch(incomingByte[0]){
         case 'I':
             state = 1;
-            throttle = OCR1A+1;
+            throttle_val = OCR1A+1;
             break;
         case 'R':
             state = 1;
-            throttle = OCR1A-1;
+            throttle_val = OCR1A-1;
             break;
         case 'S':
             state = 0;
-            throttle = THROTTLE_STILL;
+            throttle_val = THROTTLE_STILL;
             break;
         case 'P':
             state = 2;
@@ -98,13 +96,13 @@ void loop() {
         }
         break;
         case 1:
-        if(OCR1A != throttle){
-            OCR1A = throttle;
+        if(OCR1A != throttle_val){
+            OCR1A = throttle_val;
         }
         break;
         case 2:
         if(start_of_loop >= next_pid_update){
-            OCR1A = controller.Compute(set_throttle_value, rps);
+            throttle.SetValue(controller.Compute(set_throttle_value, rps));
             next_pid_update = millis() + PID_UPDATE_INTERVAL;
         }
         break;
