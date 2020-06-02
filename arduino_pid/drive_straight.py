@@ -1,6 +1,6 @@
 import json
 import argparse
-import pyserial
+import serial
 
 def main(args):
     if args.dist is None:
