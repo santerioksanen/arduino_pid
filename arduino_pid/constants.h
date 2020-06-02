@@ -29,4 +29,8 @@
 #define KI 0.5
 #define KD 0.1
 
+#define STATE_STILL 0
+#define STATE_FORWARD 1
+#define STATE_REVERSE 2
+
 #endif

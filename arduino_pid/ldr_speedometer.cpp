@@ -13,9 +13,10 @@ volatile uint32_t waves_arr[WAVES_NUM]={0};
 volatile uint8_t waves_point = 0;
 volatile uint8_t lt_avg = 0;
 volatile boolean rotation = false;
-volatile uint32_t rotation_count = 0;
+volatile int32_t rotation_count = 0;
 
 uint32_t next_measurement = 0;
+bool reverse = false;
 
 void init_ldr_adc() {
     //Enable ADC and interrupt on conversion done
@@ -53,7 +54,8 @@ void run_measurements() {
     }
 }
 
-double calculate_rps(bool print_output) {
+double calculate_rps(bool Reverse) {
+    reverse = Reverse;
     double rps = 0;
     uint16_t divider = 0;
     cli();
@@ -71,7 +73,7 @@ double calculate_rps(bool print_output) {
       j = (j-1) % WAVES_NUM;
     }
     sei();
-    if(print_output){
+    /*if(print_output){
       j = (waves_point-1) % WAVES_NUM;
       if(j < 0){
         j = WAVES_NUM-1;
@@ -86,11 +88,14 @@ double calculate_rps(bool print_output) {
       Serial.print(last_rotation);
       Serial.print(", with a rps of: ");
       Serial.println(last_rps);
-    }
+    }*/
     if(rps > 0){
       rps = divider*1000 / rps;
     } else {
       rps = 0;
+    }
+    if(reverse){
+      rps *= -1;
     }
     return rps;
 }
@@ -104,14 +109,18 @@ ISR(ADC_vect){ //This is our interrupt service routine
     lt_avg = lt_sum / MEAS_BUF_SIZE;
     if(tmp < (lt_avg - AVG_DIFF) && above_avg == true){
         if(last_below_avg > 0){
-        waves_arr[waves_point] = millis() - last_below_avg;
-        waves_point = (waves_point + 1) % WAVES_NUM;
+            waves_arr[waves_point] = millis() - last_below_avg;
+            waves_point = (waves_point + 1) % WAVES_NUM;
         }
-    last_below_avg = millis();
-    above_avg = false;
-    rotation = true;
-    last_rotation = millis();
-    rotation_count++;
+        last_below_avg = millis();
+        above_avg = false;
+        rotation = true;
+        last_rotation = millis();
+        if(reverse){
+            rotation_count--;
+        } else {
+            rotation_count++;
+        }
     } else if(tmp > (lt_avg + AVG_DIFF) && above_avg == false){
         last_above_avg = millis();
         above_avg = true;
