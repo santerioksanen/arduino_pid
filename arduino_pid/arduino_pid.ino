@@ -2,11 +2,25 @@
 #include "pid_controller.h"
 #include "ldr_speedometer.h"
 #include "actuator.h"
+#include "serial_parser.h"
 
-PID controller(PID_UPDATE_INTERVAL, 1.5, 0.5, 0.1, THROTTLE_FULL_REVERSE, THROTTLE_FULL_POWER, THROTTLE_STILL);
+// Write default values
+uint16_t throttle_still = THROTTLE_STILL;
+uint16_t throttle_full_power = THROTTLE_FULL_POWER;
+uint16_t throttle_full_reverse = THROTTLE_FULL_REVERSE;
 
-Servo throttle(THROTTLE_PIN);
-Servo steering(STEERING_PIN);
+uint16_t steering_right = STEERING_RIGHT;
+uint16_t steering_left = STEERING_LEFT;
+uint16_t steering_forward = STEERING_FORWARD;
+
+double kp = KP;
+double ki = KI;
+double kd = KD;
+
+PID controller(PID_UPDATE_INTERVAL, kp, ki, kd, throttle_full_reverse, throttle_full_power, throttle_still);
+
+Servo throttle(THROTTLE_PIN, throttle_full_reverse, throttle_still, throttle_full_power);
+Servo steering(STEERING_PIN, steering_right, steering_forward, steering_left);
 
 void setup() {
     cli();
@@ -14,8 +28,8 @@ void setup() {
     sei();
     Serial.begin(115200);
     init_servo_pwm();
-    throttle.Init(THROTTLE_STILL);
-    steering.Init(STEERING_FORWARD);
+    throttle.Init(throttle_still);
+    steering.Init(steering_forward);
     delay(1500);
 }
 
@@ -24,78 +38,28 @@ uint32_t next_pid_update = 0;
 bool reverse = false;
 
 int16_t set_throttle_value = 15;
-uint16_t throttle_val = THROTTLE_STILL;
-
-double rps = 0;
+uint16_t throttle_val = throttle_still;
 
 uint8_t state=0;    // State 0 = stay still, state 1 = throttle control, state 2 = pid control
 uint8_t incomingByte[SERIAL_BUF_SIZE];
 boolean received = false;
 uint8_t bufIdx = 0;
 
-void process_incoming_data(){
-    if(received){
-        switch(incomingByte[0]){
-        case 'I':
-            state = 1;
-            throttle_val = OCR1A+1;
-            break;
-        //case 'R':
-        //    state = 1;
-        //    throttle_val = OCR1A-1;
-        //    break;
-        case 'S':
-            state = 0;
-            throttle_val = THROTTLE_STILL;
-            break;
-        case 'P':
-            state = 2;
-            //controller.SetMinMaxOutput(THROTTLE_FULL_REVERSE, THROTTLE_STILL);
-            controller.SetMinMaxOutput(THROTTLE_STILL, THROTTLE_FULL_POWER);
-            //reverse = true;
-            set_throttle_value = 40;
-            //steering.SetValue(STEERING_RIGHT);
-            break;
-        case 'L':
-            steering.SetValue(STEERING_LEFT);
-            break;
-        case 'R':
-            steering.SetValue(STEERING_RIGHT);
-            break;
-        case 'F':
-            steering.SetValue(STEERING_FORWARD);
-            break;
-            /*switch(incomingByte[1]){
-            case 'T':   // Set Throttle (ST)
-                state = 1;
-                throttle = 
-                break;
-            }
-            break;*/
-        }
-        received = false;
-        bufIdx = 0;
-    }
-}
+double rps = 0;
+double set_rps = 0;
+double steering_angle = 0;
+
+SerialParser serial_parser(&steering_angle, &set_rps);
 
 uint32_t start_of_loop = 0;
 
 void loop() {
     start_of_loop = millis();
-
     run_measurements();
-
-    // Parse serial data
-    while (Serial.available() > 0) {
-        // read the incoming byte:
-        incomingByte[bufIdx++] = Serial.read();
-        if(incomingByte[bufIdx-1] == '\n'){
-        received = true;
-        }
-    }
-
-    process_incoming_data();
     
+    serial_parser.CheckSerial();
+    serial_parser.ParseSerial();
+
     // Calculate rps
     if(start_of_loop >= next_pid_update){
         bool print_details = false;
@@ -108,31 +72,19 @@ void loop() {
         }
         sei();
     }
-    
-    // Update throttle for pid
-    switch(state){
-        case 0:
-        if(OCR1A != THROTTLE_STILL){
-            OCR1A = THROTTLE_STILL;
-        }
-        break;
-        case 1:
-        if(OCR1A != throttle_val){
-            OCR1A = throttle_val;
-        }
-        break;
-        case 2:
-        if(start_of_loop >= next_pid_update){
-            throttle.SetValue(controller.Compute(set_throttle_value, rps));
-            next_pid_update = millis() + PID_UPDATE_INTERVAL;
-        }
-        break;
-    }
 
-    
+    steering.SetRelative(steering_angle);
+    //throttle.SetValue(controller.Compute(set_rps, rps));
+    //if(start_of_loop >= next_pid_update){
+        if(set_rps == 0){
+            controller.Reset(throttle_still);
+        }
+        throttle.SetValue(controller.Compute(set_rps, rps));
+        next_pid_update = start_of_loop + PID_UPDATE_INTERVAL;
+    //}   
 
     // Send stats over serial
-    if((millis() - lastMillis) > PRINT_INTERVAL){
+    if((start_of_loop - lastMillis) > PRINT_INTERVAL){
         //Serial.print("Long term average: ");
         //Serial.print(lt_avg);
         //Serial.print(", long term sum: ");
@@ -143,6 +95,10 @@ void loop() {
         Serial.print(state);
         Serial.print(", Throttle register: ");
         Serial.print(throttle.GetValue());
+        Serial.print(", Set RPS value: ");
+        Serial.print(set_rps);
+        Serial.print(", Set steering angle: ");
+        Serial.print(steering_angle);
         Serial.print(", rotation count: ");
         Serial.println(rotation_count);
         //Serial.print(", last measured value: ");

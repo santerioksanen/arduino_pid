@@ -36,8 +36,11 @@ int16_t lookup_pin_details(uint8_t lookup_pin){
 
 /* Constructor
 */
-Servo::Servo(uint8_t pin){
+Servo::Servo(uint8_t pin, uint16_t Min_val, uint16_t Neutral_val, uint16_t Max_val){
     pin_number = pin;
+    min_val = Min_val;
+    neutral_val = Neutral_val;
+    max_val = Max_val;
 }
 
 /* Init, sets desired pin as output
@@ -59,6 +62,14 @@ bool Servo::Init(uint16_t initial_value){
 
 void Servo::SetValue(uint16_t value){
     *p.counter = value;
+}
+
+void Servo::SetRelative(double value){
+    if(value < -1){
+        *p.counter = neutral_val + (neutral_val - min_val) * value;
+    } else {
+        *p.counter = neutral_val + (max_val - neutral_val) * value;
+    }
 }
 
 uint16_t Servo::GetValue(){

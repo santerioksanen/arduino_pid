@@ -13,14 +13,16 @@ struct Pin {
 class Servo{
 
     public:
-        Servo(uint8_t pin);
+        Servo(uint8_t pin, uint16_t Min_val, uint16_t Neutral_val, uint16_t Max_val);
         bool Init(uint16_t initial_value);
         void SetValue(uint16_t value);
+        void SetRelative(double value);
         uint16_t GetValue();
     
     private:
         uint8_t pin_number;
         Pin p;
+        uint16_t min_val, neutral_val, max_val;
 };
 
 #endif
