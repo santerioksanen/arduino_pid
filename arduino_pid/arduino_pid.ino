@@ -33,7 +33,6 @@ void setup() {
     delay(1500);
 }
 
-uint32_t lastMillis = 0;
 uint32_t next_pid_update = 0;
 
 int16_t set_throttle_value = 15;
@@ -54,6 +53,7 @@ uint8_t state_throttle = STATE_STILL;
 SerialParser serial_parser(&steering_angle, &new_set_rps);
 
 uint32_t start_of_loop = 0;
+uint32_t next_print = 0;
 
 void loop() {
     start_of_loop = millis();
@@ -103,12 +103,12 @@ void loop() {
     next_pid_update = start_of_loop + PID_UPDATE_INTERVAL; 
 
     // Send stats over serial
-    if((start_of_loop - lastMillis) > PRINT_INTERVAL){
+    if(start_of_loop > next_print){
         //Serial.print("Long term average: ");
         //Serial.print(lt_avg);
         //Serial.print(", long term sum: ");
         //Serial.print(lt_sum);
-        Serial.print("RPS: ");
+        /*Serial.print("RPS: ");
         Serial.print(rps);
         Serial.print(", Operating mode: ");
         Serial.print(state);
@@ -121,9 +121,18 @@ void loop() {
         Serial.print(", Set steering angle: ");
         Serial.print(steering_angle);
         Serial.print(", rotation count: ");
-        Serial.println(rotation_count);
+        Serial.println(rotation_count);*/
         //Serial.print(", last measured value: ");
         //Serial.println(data_arr[data_point]);
-        lastMillis = millis();
+        Serial.print("{\"rps\": ");
+        Serial.print(rps);
+        Serial.print(", \"set_rps\": ");
+        Serial.print(set_rps);
+        Serial.print(", \"steering\": ");
+        Serial.print(steering_angle);
+        Serial.print(", \"revolution_count\": ");
+        Serial.print(rotation_count);
+        Serial.println("}");
+        next_print = start_of_loop+PRINT_INTERVAL;
     }
 }
