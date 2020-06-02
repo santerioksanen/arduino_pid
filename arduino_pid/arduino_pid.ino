@@ -60,28 +60,20 @@ void loop() {
     serial_parser.CheckSerial();
     serial_parser.ParseSerial();
 
-    // Calculate rps
-    if(start_of_loop >= next_pid_update){
-        bool print_details = false;
-        if(state == 2) print_details=true;
-        
-        rps = calculate_rps(print_details);
-        cli();
-        if(reverse == true){
-            rps = rps*-1;
-        }
-        sei();
+    // Calculate rps        
+    rps = calculate_rps(false);
+    cli();
+    if(reverse == true){
+        rps = rps*-1;
     }
+    sei();
 
     steering.SetRelative(steering_angle);
-    //throttle.SetValue(controller.Compute(set_rps, rps));
-    //if(start_of_loop >= next_pid_update){
-        if(set_rps == 0){
-            controller.Reset(throttle_still);
-        }
-        throttle.SetValue(controller.Compute(set_rps, rps));
-        next_pid_update = start_of_loop + PID_UPDATE_INTERVAL;
-    //}   
+    if(set_rps == 0){
+        controller.Reset(throttle_still);
+    }
+    throttle.SetValue(controller.Compute(set_rps, rps));
+    next_pid_update = start_of_loop + PID_UPDATE_INTERVAL; 
 
     // Send stats over serial
     if((start_of_loop - lastMillis) > PRINT_INTERVAL){
