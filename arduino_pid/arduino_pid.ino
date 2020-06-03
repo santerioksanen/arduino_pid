@@ -3,6 +3,7 @@
 #include "ldr_speedometer.h"
 #include "actuator.h"
 #include "serial_parser.h"
+#include "odometry.h"
 
 // Write default values
 uint16_t throttle_still = THROTTLE_STILL;
@@ -13,14 +14,20 @@ uint16_t steering_right = STEERING_RIGHT;
 uint16_t steering_left = STEERING_LEFT;
 uint16_t steering_forward = STEERING_FORWARD;
 
-double kp = KP;
-double ki = KI;
-double kd = KD;
+double kp_f = KP_F;
+double ki_f = KI_F;
+double kd_f = KD_F;
 
-PID controller(PID_UPDATE_INTERVAL, kp, ki, kd, throttle_full_reverse, throttle_full_power, throttle_still);
+double kp_r = KP_R;
+double ki_r = KI_R;
+double kd_r = KD_R;
+
+PID controller(PID_UPDATE_INTERVAL, kp_f, ki_f, kd_f, throttle_full_reverse, throttle_full_power, throttle_still);
 
 Servo throttle(THROTTLE_PIN, throttle_full_reverse, throttle_still, throttle_full_power);
 Servo steering(STEERING_PIN, steering_right, steering_forward, steering_left);
+
+Odometry odo(0, 0, 0, WHEELBASE, DIAMETER, MAX_STEERING_ANGLE, TICK_TO_ROT_RATIO);
 
 void setup() {
     cli();
@@ -59,6 +66,8 @@ void loop() {
     start_of_loop = millis();
     run_measurements();
     
+    odo.Update(rotation_count, steering_angle);
+
     serial_parser.CheckSerial();
     serial_parser.ParseSerial();
 
@@ -84,6 +93,7 @@ void loop() {
             } else {
                 set_rps = new_set_rps;
                 controller.SetMinMaxOutput(THROTTLE_STILL, THROTTLE_FULL_POWER);
+                controller.SetTunings(kp_f, ki_f, kd_f);
                 state_throttle = STATE_FORWARD;
             }
         } else if(new_set_rps < 0){
@@ -94,6 +104,7 @@ void loop() {
             } else {
                 set_rps = new_set_rps;
                 controller.SetMinMaxOutput(THROTTLE_FULL_REVERSE, THROTTLE_STILL);
+                controller.SetTunings(kp_r, ki_r, kd_r);
                 state_throttle = STATE_REVERSE;
             }
         } 
@@ -132,6 +143,14 @@ void loop() {
         Serial.print(steering_angle);
         Serial.print(", \"revolution_count\": ");
         Serial.print(rotation_count);
+        Serial.print(", \"x\": ");
+        Serial.print(odo.GetX());
+        Serial.print(", \"y\": ");
+        Serial.print(odo.GetY());
+        Serial.print(", \"orientation\": ");
+        Serial.print(odo.GetOrientation());
+        Serial.print(", \"dist\": ");
+        Serial.print(odo.GetDistance());
         Serial.println("}");
         next_print = start_of_loop+PRINT_INTERVAL;
     }

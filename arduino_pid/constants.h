@@ -17,7 +17,7 @@
 
 #define STEERING_PIN 10
 #define STEERING_RIGHT 1220
-#define STEERING_FORWARD 1500
+#define STEERING_FORWARD 1470
 #define STEERING_LEFT 1780
 
 #define PID_UPDATE_INTERVAL 100
@@ -25,12 +25,21 @@
 #define CLEAR_MEASUREMENTS_DELAY 200
 #define PRINT_INTERVAL 50
 
-#define KP 1.5
-#define KI 0.5
-#define KD 0.1
+#define KP_F 4
+#define KI_F 1
+#define KD_F 0.1
+
+#define KP_R 1
+#define KI_R 0.5
+#define KD_R 0.1
 
 #define STATE_STILL 0
 #define STATE_FORWARD 1
 #define STATE_REVERSE 2
+
+#define WHEELBASE 0.3
+#define DIAMETER 0.065
+#define MAX_STEERING_ANGLE 0.69813 // Roughly 40 deg
+#define TICK_TO_ROT_RATIO 11
 
 #endif
