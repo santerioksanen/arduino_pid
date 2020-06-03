@@ -37,9 +37,9 @@
 #define STATE_FORWARD 1
 #define STATE_REVERSE 2
 
-#define WHEELBASE 0.3
+#define WHEELBASE 0.256
 #define DIAMETER 0.065
-#define MAX_STEERING_ANGLE 0.69813 // Roughly 40 deg
-#define TICK_TO_ROT_RATIO 11
+#define MAX_STEERING_ANGLE 0.69813  // Roughly 40 deg
+#define TICK_TO_ROT_RATIO 12.1875   // Gears 16:39, 5 pulses for one rotation in smaller gear
 
 #endif

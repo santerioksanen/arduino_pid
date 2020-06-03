@@ -9,5 +9,5 @@ class Odometry{
     
     private:
         int32_t revolution_count;
-        double wheelbase, diameter, orientation, x, y, rev_to_dist, max_steering_angle;
+        double wheelbase, diameter, orientation, x, y, rev_to_dist, max_steering_angle, prev_steering_angle;
 };
